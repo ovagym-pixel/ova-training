@@ -27,7 +27,7 @@ export function renderDashboard({ user, role, userDoc, profile, root }) {
         <div class="sidebar-content">
           <div class="section-title">§ Gestión</div>
           <a class="active"><span class="num">01</span><span>Dashboard</span></a>
-          <a><span class="num">02</span><span>Clientes</span></a>
+          <a href="#/clients"><span class="num">02</span><span>Clientes</span></a>
           <a><span class="num">03</span><span>Colaboradores</span></a>
           ${adminLinks}
           <div class="divider"></div>

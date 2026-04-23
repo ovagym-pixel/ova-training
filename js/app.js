@@ -4,6 +4,8 @@ import { renderDashboard } from "./modules/dashboard.js";
 import { renderRoleProfiles } from "./modules/role-profiles.js";
 import { renderClientPortal } from "./modules/client-portal.js";
 import { renderAdminClientAccess } from "./modules/admin-client-access.js";
+import { renderClientsList } from "./modules/clients-list.js";
+import { renderClientsNew } from "./modules/clients-new.js";
 import { attachTopbarBehavior } from "./shared/topbar.js";
 
 registerRoute("/login", renderLogin);
@@ -11,6 +13,11 @@ registerRoute("/dashboard", renderDashboard);
 registerRoute("/role-profiles", renderRoleProfiles);
 registerRoute("/admin-client-access", renderAdminClientAccess);
 registerRoute("/c/:token", renderClientPortal);
+
+// B.3 — Módulo de clientes
+registerRoute("/clients", renderClientsList);
+registerRoute("/clients/new", renderClientsNew);
+// El detalle /clients/:id viene en B.3 parte 2
 
 registerRoute("/", ({ user }) => {
   window.location.hash = user ? "/dashboard" : "/login";
