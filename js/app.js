@@ -2,14 +2,14 @@ import { registerRoute, startRouter } from "./router.js";
 import { renderLogin } from "./modules/login.js";
 import { renderDashboard } from "./modules/dashboard.js";
 import { attachTopbarBehavior } from "./shared/topbar.js";
-
+ 
 registerRoute("/login", renderLogin);
 registerRoute("/dashboard", renderDashboard);
-
+ 
 registerRoute("/", ({ user }) => {
   window.location.hash = user ? "/dashboard" : "/login";
 });
-
+ 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("./service-worker.js").catch(err => {
@@ -17,12 +17,11 @@ if ("serviceWorker" in navigator) {
     });
   });
 }
-
-const observer = new MutationObserver(() => {
-  if (document.getElementById("theme-toggle")) {
-    attachTopbarBehavior();
-  }
+ 
+window.addEventListener("hashchange", () => {
+  setTimeout(attachTopbarBehavior, 50);
 });
-observer.observe(document.body, { childList: true, subtree: true });
-
+ 
 startRouter();
+ 
+setTimeout(attachTopbarBehavior, 300);
