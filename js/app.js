@@ -1,15 +1,17 @@
 import { registerRoute, startRouter } from "./router.js";
 import { renderLogin } from "./modules/login.js";
 import { renderDashboard } from "./modules/dashboard.js";
+import { renderRoleProfiles } from "./modules/role-profiles.js";
 import { attachTopbarBehavior } from "./shared/topbar.js";
- 
+
 registerRoute("/login", renderLogin);
 registerRoute("/dashboard", renderDashboard);
- 
+registerRoute("/role-profiles", renderRoleProfiles);
+
 registerRoute("/", ({ user }) => {
   window.location.hash = user ? "/dashboard" : "/login";
 });
- 
+
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("./service-worker.js").catch(err => {
@@ -17,11 +19,11 @@ if ("serviceWorker" in navigator) {
     });
   });
 }
- 
+
 window.addEventListener("hashchange", () => {
   setTimeout(attachTopbarBehavior, 50);
 });
- 
+
 startRouter();
- 
+
 setTimeout(attachTopbarBehavior, 300);

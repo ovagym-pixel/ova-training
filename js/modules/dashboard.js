@@ -3,11 +3,21 @@ import { signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-aut
 import { navigate } from "../router.js";
 import { renderTopbar } from "../shared/topbar.js";
 
-export function renderDashboard({ user, role, root }) {
+export function renderDashboard({ user, role, userDoc, profile, root }) {
   if (!user) {
     navigate("/login");
     return;
   }
+
+  const displayName = userDoc?.displayName || user.email.split("@")[0];
+  const roleLabel = role === "admin"
+    ? "Administrador"
+    : (profile?.name || "Colaborador");
+
+  // Link a "Perfiles de rol" visible solo para admin
+  const adminLinks = role === "admin" ? `
+    <a href="#/role-profiles"><span class="num">04</span><span>Perfiles de rol</span></a>
+  ` : "";
 
   root.innerHTML = `
     ${renderTopbar(role)}
@@ -18,6 +28,7 @@ export function renderDashboard({ user, role, root }) {
           <a class="active"><span class="num">01</span><span>Dashboard</span></a>
           <a><span class="num">02</span><span>Clientes</span></a>
           <a><span class="num">03</span><span>Colaboradores</span></a>
+          ${adminLinks}
           <div class="divider"></div>
           <a id="logout-link" style="color:var(--danger)"><span class="num">×</span><span>Cerrar sesión</span></a>
         </div>
@@ -30,16 +41,16 @@ export function renderDashboard({ user, role, root }) {
           <span class="current">DASHBOARD</span>
         </div>
         <div class="kicker">§ 01 · Bienvenida</div>
-        <h1>Hola, <span class="accent">${user.email.split("@")[0]}</span>.</h1>
+        <h1>Hola, <span class="accent">${displayName}</span>.</h1>
         <p style="color:var(--ink-2);max-width:560px;margin-bottom:32px">
-          Sistema B.1 operativo. Autenticación funcionando. Próximo paso: cargar el modelo de datos y gestión de clientes.
+          Sistema B.2.3 operativo. Sesión validada contra Firestore con perfiles de rol.
         </p>
 
         <div class="metrics">
           <div class="metric">
-            <div class="label">Rol actual</div>
-            <div class="val" style="font-size:20px">${role || "—"}</div>
-            <div class="sub">detectado automáticamente</div>
+            <div class="label">Rol</div>
+            <div class="val" style="font-size:20px">${roleLabel}</div>
+            <div class="sub">${role === "admin" ? "acceso total" : "desde perfil de rol"}</div>
           </div>
           <div class="metric">
             <div class="label">Email</div>
@@ -51,10 +62,13 @@ export function renderDashboard({ user, role, root }) {
           </div>
         </div>
 
-        <div class="note info">
-          <strong>Hito B.1 completado.</strong><br>
-          El sistema está levantado, la autenticación funciona y el routing entre pantallas está operativo.
-        </div>
+        ${role === "admin" ? `
+          <div class="note info">
+            <strong>Hito B.2.3 completado.</strong><br>
+            Sistema de perfiles de rol operativo. Desde el menú lateral podés gestionar
+            los perfiles y sus permisos.
+          </div>
+        ` : ""}
       </main>
     </div>
   `;
