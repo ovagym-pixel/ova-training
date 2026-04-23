@@ -24,12 +24,12 @@ import {
 import { getAuth } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 const firebaseConfig = {
-  apiKey: "REEMPLAZAR_CON_TU_API_KEY",
+  apiKey: "AIzaSyAiUOOJ4wX5mJZ8_8OyEuYI-6ySRTImq14",
   authDomain: "ova-training.firebaseapp.com",
   projectId: "ova-training",
   storageBucket: "ova-training.firebasestorage.app",
-  messagingSenderId: "REEMPLAZAR",
-  appId: "REEMPLAZAR"
+  messagingSenderId: "760177451014",
+  appId: "1:760177451014:web:0972274591d71c8d526387"
 };
 
 // App principal (sin nombre custom → es la "default")
@@ -47,7 +47,7 @@ export const db = initializeFirestore(app, {
 export const auth = getAuth(app);
 
 export const groqConfig = {
-  apiKey: "REEMPLAZAR_CON_TU_API_KEY_GROQ",
+  apiKey: "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",
   model: "llama-3.3-70b-versatile",
   url: "https://api.groq.com/openai/v1/chat/completions"
 };
