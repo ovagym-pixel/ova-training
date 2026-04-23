@@ -715,3 +715,191 @@ code {
   #perms-grid { grid-template-columns: 1fr; }
   .widgets-grid { grid-template-columns: 1fr; }
 }
+
+/* ============================================================================
+   B.2.4 — Portal cliente + admin client access
+   ============================================================================ */
+
+/* ---------- Portal cliente: wrap y card ---------- */
+.client-portal-wrap {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: var(--bg);
+}
+.client-card {
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 32px;
+  max-width: 460px;
+  width: 100%;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+.client-logo {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.client-loading-label {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-3);
+  margin-top: 16px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-align: center;
+}
+
+/* El spinner reutiliza la clase existente pero centrado dentro de la card */
+.client-card .spinner {
+  margin: 20px auto 0 auto;
+  display: block;
+}
+
+/* ---------- Portal cliente: grid de módulos ---------- */
+.client-module-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+.client-module {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), transform var(--transition-fast);
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.client-module:hover:not(.disabled) {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+.client-module.disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.client-module-icon {
+  font-size: 22px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.client-module-body { flex: 1; min-width: 0; }
+.client-module-title { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+.client-module-desc {
+  font-size: 11px;
+  color: var(--ink-3);
+  line-height: 1.4;
+}
+.client-module-soon {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 2px 6px;
+  background: var(--bg-3);
+  font-size: 9px;
+  font-family: var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-radius: 3px;
+  color: var(--ink-3);
+}
+.client-footer {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  text-align: center;
+}
+
+/* ---------- Admin debug screen: client cards ---------- */
+.admin-client-card {
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  margin-bottom: 14px;
+  overflow: hidden;
+}
+.admin-client-header {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-3);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.admin-client-body { padding: 16px 18px; }
+.admin-field-label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.admin-device-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.admin-actions-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.admin-actions-row .btn { padding: 7px 12px; font-size: 12px; }
+
+/* ---------- Toast ---------- */
+.toast-msg {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--ink);
+  color: var(--bg);
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0;
+  z-index: 300;
+  transition: opacity 0.25s, transform 0.25s;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+.toast-msg.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* ---------- Light mode adjustments ---------- */
+body.light .client-card {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+body.light .toast-msg {
+  background: #1a1a1a;
+  color: #fff;
+}
+
+/* ---------- Mobile ---------- */
+@media (max-width: 500px) {
+  .client-card { padding: 24px 18px; }
+  .client-module-grid { grid-template-columns: 1fr; }
+}

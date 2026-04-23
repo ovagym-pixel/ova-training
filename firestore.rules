@@ -1,0 +1,328 @@
+rules_version = '2';
+
+// ============================================================================
+// OVA Training — Firestore security rules (B.2.4)
+// ============================================================================
+//
+// Tres "clases" de usuario:
+//
+//   1) ADMIN
+//      - Autenticado con email/pass
+//      - Doc /users/{uid} con type == 'admin'
+//      - Puede todo
+//
+//   2) COLAB
+//      - Autenticado con email/pass
+//      - Doc /users/{uid} con type == 'colab'
+//      - Acceso acotado a sus clientes asignados
+//
+//   3) CLIENTE ANÓNIMO
+//      - Autenticado con signInAnonymously (sin email)
+//      - NO tiene doc /users/{uid}
+//      - Se identifica porque su uid está en /clients/{id}.trustedDevices[].uid
+//        (o equivalentemente, en /clientAccess/{token}.trustedUids)
+//      - Puede leer solo sus propios datos a través de /clientsPublic
+//      - Puede escribir capacidades específicas (attendance, proteinLog, etc.)
+//
+// CONVENCIÓN: el "cliente dueño" de un doc es aquel cuyo `clientId` matchea
+// con el doc `/clients/{clientId}` que tenga al uid actual en trustedDevices.
+// ============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // =======================================================================
+    // HELPERS
+    // =======================================================================
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function hasUserDoc() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function isAdmin() {
+      return hasUserDoc() && userData().type == 'admin';
+    }
+
+    function isColab() {
+      return hasUserDoc() && userData().type == 'colab';
+    }
+
+    function isStaff() {
+      return isAdmin() || isColab();
+    }
+
+    function isAssignedColab(clientId) {
+      return isColab()
+        && get(/databases/$(database)/documents/clients/$(clientId)).data.assignedColabId == request.auth.uid;
+    }
+
+    // Para el cliente anónimo: devuelve true si el uid actual está en
+    // trustedDevices[] del cliente indicado.
+    //
+    // Arrays de objetos no tienen hasAny con match parcial en las rules,
+    // entonces guardamos un array paralelo de solo strings (trustedUids)
+    // directamente en /clients/{clientId}.
+    function isClientOwner(clientId) {
+      let client = get(/databases/$(database)/documents/clients/$(clientId)).data;
+      return isSignedIn()
+        && client.clientPortalActive == true
+        && client.trustedUids != null
+        && client.trustedUids.hasAny([request.auth.uid]);
+    }
+
+    // Alias para mantener consistencia con el código existente.
+    function isClientByAccess(clientId) {
+      return isClientOwner(clientId);
+    }
+
+    // =======================================================================
+    // /config/** — configuración del sistema (pricing, mensajes, catálogos)
+    // =======================================================================
+    match /config/{document=**} {
+      allow read: if isStaff();
+      allow write: if isAdmin();
+    }
+
+    // =======================================================================
+    // /roleProfiles/** — perfiles de rol (B.2.3)
+    // =======================================================================
+    match /roleProfiles/{profileId} {
+      allow read: if isStaff();
+      allow write: if isAdmin();
+    }
+
+    // =======================================================================
+    // /users/** — cuentas de staff
+    // =======================================================================
+    match /users/{uid} {
+      allow read: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+      allow create: if isAdmin();
+      allow update: if isAdmin()
+        || (isSignedIn() && request.auth.uid == uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastLoginAt']));
+      allow delete: if isAdmin();
+    }
+
+    // =======================================================================
+    // /clientAccess/{token} — doc "público" para el flujo de login del cliente
+    // =======================================================================
+    //
+    // Contiene SOLO los campos necesarios para autenticar al cliente:
+    //   clientId, pinHash, salt, pinSetAt, pinFailedAttempts, pinLockedUntil,
+    //   trustedUids (array de strings con uids anónimos confiables),
+    //   clientPortalActive.
+    //
+    // Lectura: pública (cualquier anónimo autenticado que conozca el token).
+    // Escritura:
+    //   - Staff: libre (para regenerar, resetear, etc.)
+    //   - Cliente anónimo: solo puede modificar campos específicos y solo
+    //     en contextos acotados (setear su propio PIN por primera vez,
+    //     agregar su uid a trustedUids tras validar PIN, o actualizar
+    //     contador de intentos fallidos).
+    //
+    // Las validaciones de NEGOCIO (que el PIN sea el correcto, que los
+    // attempts estén bien) las hace el frontend. Las reglas solo previenen
+    // los abusos más obvios (no dejar que el cliente se borre el clientId,
+    // no dejar que modifique campos ajenos, etc.).
+    // =======================================================================
+    match /clientAccess/{token} {
+      allow read: if isSignedIn();
+      allow create, delete: if isAdmin();
+
+      // Staff puede todo
+      allow update: if isStaff();
+
+      // Cliente anónimo puede actualizar SOLO estos campos
+      allow update: if isSignedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+             'pinHash',
+             'salt',
+             'pinSetAt',
+             'pinFailedAttempts',
+             'pinLockedUntil',
+             'trustedUids'
+           ])
+        // No puede cambiar el clientId vinculado
+        && request.resource.data.clientId == resource.data.clientId
+        // No puede desactivar el portal a sí mismo
+        && request.resource.data.clientPortalActive == resource.data.clientPortalActive;
+    }
+
+    // =======================================================================
+    // /clients/{clientId} — datos sensibles del cliente (solo staff)
+    // =======================================================================
+    //
+    // El cliente NO lee ni escribe este doc directamente. Para los datos
+    // que el cliente puede ver, hay un doc espejo /clientsPublic/{clientId}.
+    //
+    // Excepción: las operaciones de PIN (setInitialPin / validatePinAttempt)
+    // también escriben en este doc para mantener sincronía. Por eso permitimos
+    // que un cliente anónimo actualice SÓLO los campos relacionados al PIN.
+    // =======================================================================
+    match /clients/{clientId} {
+      allow read: if isAdmin() || isAssignedColab(clientId);
+      allow create: if isStaff();
+      allow update: if isAdmin() || isAssignedColab(clientId);
+      allow delete: if isAdmin();
+
+      // Cliente anónimo: update acotado a campos de PIN/devices
+      allow update: if isSignedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+             'pinHash',
+             'salt',
+             'pinSetAt',
+             'pinFailedAttempts',
+             'pinLockedUntil',
+             'trustedDevices',
+             'trustedUids'
+           ]);
+
+      // Subcolecciones — delegamos en matches específicos más abajo
+      // =====================================================================
+
+      match /services/{serviceId} {
+        allow read: if isAdmin() || isAssignedColab(clientId);
+        allow write: if isAdmin() || isAssignedColab(clientId);
+      }
+
+      match /measurements/{measurementId} {
+        allow read: if isAdmin() || isAssignedColab(clientId);
+        allow create: if isAdmin() || isAssignedColab(clientId);
+        allow update: if isAdmin() || isAssignedColab(clientId);
+        allow delete: if isAdmin();
+      }
+
+      match /payments/{paymentId} {
+        allow read: if isAdmin() || isAssignedColab(clientId);
+        allow create: if isStaff();
+        allow update: if isAdmin();
+        allow delete: if isAdmin();
+      }
+
+      // ---------------------------------------------------------------------
+      // /clients/{id}/attendance/{date} — check-ins
+      // El cliente puede crear asistencias SUYAS con method='self' y fecha
+      // dentro de los últimos 7 días. El staff puede gestionar todas.
+      // ---------------------------------------------------------------------
+      match /attendance/{date} {
+        allow read: if isAdmin()
+          || isAssignedColab(clientId)
+          || isClientByAccess(clientId);
+
+        // Staff: libre
+        allow write: if isAdmin() || isAssignedColab(clientId);
+
+        // Cliente: crear asistencia propia (self check-in)
+        allow create: if isClientByAccess(clientId)
+          && request.resource.data.method == 'self'
+          && request.resource.data.date is string
+          // La validación estricta de fecha (hoy + 7 días atrás) la hace
+          // el frontend. Acá prevenimos fechas futuras como mínimo.
+          && request.resource.data.date <= string(request.time.toMillis());
+      }
+
+      // ---------------------------------------------------------------------
+      // /clients/{id}/proteinLog/{logId} — registros de proteína
+      // ---------------------------------------------------------------------
+      match /proteinLog/{logId} {
+        allow read: if isAdmin()
+          || isAssignedColab(clientId)
+          || isClientByAccess(clientId);
+        allow write: if isAdmin()
+          || isAssignedColab(clientId)
+          || isClientByAccess(clientId);
+      }
+
+      // ---------------------------------------------------------------------
+      // /clients/{id}/onboarding/{step} — progreso del onboarding
+      // ---------------------------------------------------------------------
+      match /onboarding/{step} {
+        allow read: if isAdmin()
+          || isAssignedColab(clientId)
+          || isClientByAccess(clientId);
+        allow write: if isAdmin() || isAssignedColab(clientId);
+        allow create, update: if isClientByAccess(clientId);
+      }
+
+      // ---------------------------------------------------------------------
+      // /clients/{id}/clientNotes/{noteId} — notas del cliente (visibles al staff)
+      // ---------------------------------------------------------------------
+      match /clientNotes/{noteId} {
+        allow read: if isAdmin()
+          || isAssignedColab(clientId)
+          || isClientByAccess(clientId);
+        allow write: if isAdmin() || isAssignedColab(clientId);
+        allow create, update, delete: if isClientByAccess(clientId);
+      }
+    }
+
+    // =======================================================================
+    // /clientsPublic/{clientId} — vista del cliente
+    // =======================================================================
+    //
+    // Doc espejo con los datos que el cliente puede ver de sí mismo:
+    //   displayName, phone, photoUrl, emergencyContact, currentServiceName, etc.
+    //
+    // El staff lo mantiene en sync con /clients/{clientId} cuando edita datos
+    // personales del cliente (por ahora manualmente; a futuro puede ser con
+    // un Cloud Function cuando migremos a Blaze).
+    //
+    // El cliente puede editar SOLO su propio perfil público.
+    // =======================================================================
+    match /clientsPublic/{clientId} {
+      allow read: if isAdmin()
+        || isAssignedColab(clientId)
+        || isClientByAccess(clientId);
+
+      allow create, delete: if isStaff();
+      allow update: if isStaff();
+
+      // Cliente: update acotado a sus datos personales editables
+      allow update: if isClientByAccess(clientId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+             'displayName',
+             'phone',
+             'photoUrl',
+             'emergencyContact',
+             'updatedAt'
+           ]);
+    }
+
+    // =======================================================================
+    // /surveys/{surveyId} — encuestas del sistema
+    // =======================================================================
+    match /surveys/{surveyId} {
+      // Staff lee todas; cliente lee las que están publicadas
+      allow read: if isStaff()
+        || (isSignedIn() && resource.data.published == true);
+      allow create, update, delete: if isAdmin();
+    }
+
+    // =======================================================================
+    // /surveyResponses/{responseId} — respuestas
+    // =======================================================================
+    match /surveyResponses/{responseId} {
+      allow read: if isAdmin()
+        || (isColab() && resource.data.respondentType == 'client'
+            && isAssignedColab(resource.data.respondentId));
+
+      // El cliente crea su propia respuesta, con su clientId en respondentId
+      // y su anonUid en respondentAnonUid para que podamos verificarlo.
+      allow create: if isSignedIn()
+        && request.resource.data.respondentType == 'client'
+        && request.resource.data.respondentAnonUid == request.auth.uid
+        && isClientByAccess(request.resource.data.respondentId);
+
+      allow update, delete: if isAdmin();
+    }
+  }
+}

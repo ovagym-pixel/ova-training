@@ -2,11 +2,15 @@ import { registerRoute, startRouter } from "./router.js";
 import { renderLogin } from "./modules/login.js";
 import { renderDashboard } from "./modules/dashboard.js";
 import { renderRoleProfiles } from "./modules/role-profiles.js";
+import { renderClientPortal } from "./modules/client-portal.js";
+import { renderAdminClientAccess } from "./modules/admin-client-access.js";
 import { attachTopbarBehavior } from "./shared/topbar.js";
 
 registerRoute("/login", renderLogin);
 registerRoute("/dashboard", renderDashboard);
 registerRoute("/role-profiles", renderRoleProfiles);
+registerRoute("/admin-client-access", renderAdminClientAccess);
+registerRoute("/c/:token", renderClientPortal);
 
 registerRoute("/", ({ user }) => {
   window.location.hash = user ? "/dashboard" : "/login";

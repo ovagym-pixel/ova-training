@@ -17,6 +17,7 @@ export function renderDashboard({ user, role, userDoc, profile, root }) {
   // Link a "Perfiles de rol" visible solo para admin
   const adminLinks = role === "admin" ? `
     <a href="#/role-profiles"><span class="num">04</span><span>Perfiles de rol</span></a>
+    <a href="#/admin-client-access"><span class="num">05</span><span>Acceso cliente (debug)</span></a>
   ` : "";
 
   root.innerHTML = `

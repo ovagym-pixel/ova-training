@@ -218,6 +218,17 @@ function renderRecoveryScreen(uid, email) {
 // Carga de sesión: user doc + role profile + permisos
 // ----------------------------------------------------------------------------
 
+/**
+ * Indica si la URL actual corresponde al portal cliente.
+ * El portal usa hashes tipo #/c/<token> y NO debe pasar por el flujo de
+ * validación admin/colab (el cliente se autentica anónimamente y no tiene
+ * doc en /users/).
+ */
+function isClientPortalRoute() {
+  const hash = window.location.hash || "";
+  return hash.startsWith("#/c/") || hash === "#/c";
+}
+
 async function loadUserSession(user) {
   // Reseteamos el estado antes de cargar
   currentUser = user;
@@ -227,6 +238,12 @@ async function loadUserSession(user) {
   currentPermissions = null;
 
   if (!user) return { ok: true };
+
+  // Si el usuario es anónimo (portal cliente) no intentamos cargar /users/{uid}.
+  // El client-portal maneja su propio estado internamente.
+  if (user.isAnonymous) {
+    return { ok: true, isAnonymous: true };
+  }
 
   // 1) Leer el doc /users/{uid}
   let userSnap;
@@ -333,6 +350,20 @@ export function startRouter() {
   window.addEventListener("hashchange", render);
 
   onAuthStateChanged(auth, async user => {
+    // Si estamos en una ruta del portal cliente, SALTAMOS el flujo admin/colab
+    // completamente. El portal se auto-autentica como anónimo y maneja todo
+    // internamente.
+    if (isClientPortalRoute()) {
+      currentUser = user;
+      currentRole = user?.isAnonymous ? "client-anon" : null;
+      currentUserDoc = null;
+      currentProfile = null;
+      currentPermissions = null;
+      sessionReady = true;
+      render();
+      return;
+    }
+
     const result = await loadUserSession(user);
     sessionReady = true;
 
@@ -343,6 +374,16 @@ export function startRouter() {
       } else {
         render();
       }
+      return;
+    }
+
+    // Caso especial: usuario anónimo pero NO estamos en ruta del portal cliente.
+    // Esto pasa si alguien cerró el portal y volvió a la raíz. Como no tiene
+    // doc en /users, el flujo normal lo desautenticaría. En su lugar, lo
+    // mandamos a /login silenciosamente sin mostrar mensaje de error.
+    if (user.isAnonymous) {
+      await signOut(auth);
+      window.location.hash = "/login";
       return;
     }
 
