@@ -11,7 +11,7 @@
 // se construyen en B.5+.
 // ============================================================================
 
-import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { clientAuth, db } from "../../firebase/client-config.js";
 import { clearLastToken } from "../../shared/client-session.js";
@@ -74,19 +74,51 @@ export async function renderPortalHome({ root, access, uid }) {
   document.getElementById("client-logout").addEventListener("click", async () => {
     if (!confirm("¿Cerrar sesión en este dispositivo? La próxima vez que entres al link vas a tener que ingresar tu PIN.")) return;
 
+    const btn = document.getElementById("client-logout");
+    btn.disabled = true;
+
+    // 1) Auto-revocar este uid del cliente ANTES de hacer signOut.
+    //    Eliminamos el objeto device de trustedDevices y el uid de trustedUids
+    //    en ambos docs (/clientAccess/{token} y /clients/{clientId}).
+    //    Esto evita que se acumulen "devices zombi" en el panel de admin.
+    try {
+      const accessToken = access.token;
+
+      // /clientAccess/{token}: solo tiene trustedUids (array de strings)
+      if (accessToken) {
+        const accessSnap = await getDoc(doc(db, "clientAccess", accessToken));
+        if (accessSnap.exists()) {
+          const currentUids = accessSnap.data().trustedUids || [];
+          await updateDoc(doc(db, "clientAccess", accessToken), {
+            trustedUids: currentUids.filter(u => u !== uid)
+          });
+        }
+      }
+
+      // /clients/{clientId}: tiene trustedUids Y trustedDevices (array de objetos)
+      const clientSnap = await getDoc(doc(db, "clients", clientId));
+      if (clientSnap.exists()) {
+        const cData = clientSnap.data();
+        const newUids = (cData.trustedUids || []).filter(u => u !== uid);
+        const newDevices = (cData.trustedDevices || []).filter(d => d.uid !== uid);
+        await updateDoc(doc(db, "clients", clientId), {
+          trustedUids: newUids,
+          trustedDevices: newDevices
+        });
+      }
+    } catch (err) {
+      // Si la auto-revocación falla (ej: offline), seguimos igual con el logout.
+      // El admin puede revocar manualmente después si hace falta.
+      console.warn("[portal-home] No se pudo auto-revocar el device:", err);
+    }
+
+    // 2) Cerrar sesión de Firebase (invalida el uid anónimo en este browser)
     try {
       await signOut(clientAuth);
     } catch {}
     clearLastToken();
 
-    // NOTA: signOut de usuario anónimo revoca el uid actual, pero el uid sigue
-    // quedando en trustedUids del cliente. Eso está OK porque la próxima vez
-    // que entre se va a generar un uid anónimo DISTINTO, que no va a estar
-    // en trustedUids, por lo que le va a pedir PIN.
-    //
-    // La limpieza de trustedUids "viejos" (de devices que nunca se van a
-    // volver a usar) es responsabilidad del admin desde el panel de gestión.
-
+    // 3) Pantalla de confirmación
     root.innerHTML = `
       <div class="client-portal-wrap">
         <div class="client-card">
