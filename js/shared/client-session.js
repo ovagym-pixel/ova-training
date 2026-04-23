@@ -20,8 +20,7 @@
 import { auth, db } from "../firebase/config.js";
 import {
   signInAnonymously,
-  signOut,
-  onAuthStateChanged
+  signOut
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   doc,
@@ -50,82 +49,48 @@ let loadedAccess = null;  // doc /clientAccess/{token}
 /**
  * Garantiza que hay un usuario anónimo autenticado para el portal cliente.
  *
- * Casos que maneja:
- *   a) Ya tenemos un uid anónimo cacheado en memoria y sigue válido → usarlo
- *   b) auth.currentUser existe y es anónimo → usarlo
- *   c) auth.currentUser existe pero NO es anónimo (se loguea alguien con email
- *      y entra al link de cliente por error) → NO queremos pisar su sesión,
- *      hacemos sign-out y después signInAnonymously
- *   d) No hay user → signInAnonymously
+ * Implementación sin listeners: usamos auth.authStateReady() (Firebase SDK
+ * 10+) que resuelve una sola vez cuando el estado persistido está hidratado.
+ * Así evitamos conflictos con el onAuthStateChanged del router global.
  *
- * La clave: esperar que Firebase termine de hidratar el estado persistido
- * antes de decidir. Por eso usamos onAuthStateChanged y NO miramos
- * auth.currentUser directamente al principio (puede ser null antes de hidratar
- * y luego cambiar).
+ * Casos que maneja:
+ *   a) Ya hay user anónimo → usarlo
+ *   b) Hay user NO anónimo → signOut, después signInAnonymously
+ *   c) No hay user → signInAnonymously
  */
-export function ensureAnonAuth() {
-  return new Promise((resolve, reject) => {
-    // Fast path: ya resolvimos en esta misma sesión de pestaña
-    if (anonUid && auth.currentUser?.uid === anonUid && auth.currentUser?.isAnonymous) {
-      resolve(anonUid);
-      return;
-    }
+export async function ensureAnonAuth() {
+  // Fast path dentro de la misma sesión de pestaña
+  if (anonUid && auth.currentUser?.uid === anonUid && auth.currentUser?.isAnonymous) {
+    return anonUid;
+  }
 
-    let resolved = false;
+  // Esperar a que Firebase termine de hidratar el estado persistido.
+  // authStateReady() está disponible en Firebase JS SDK 10.x+
+  try {
+    await auth.authStateReady();
+  } catch (err) {
+    console.warn("[client-session] authStateReady falló, seguimos:", err);
+  }
 
-    const unsub = onAuthStateChanged(auth, async user => {
-      if (resolved) return;
+  const current = auth.currentUser;
 
-      // Caso a+b: user presente y anónimo → reutilizar
-      if (user && user.isAnonymous) {
-        resolved = true;
-        unsub();
-        anonUid = user.uid;
-        resolve(user.uid);
-        return;
-      }
+  // Caso a: ya hay user anónimo
+  if (current && current.isAnonymous) {
+    anonUid = current.uid;
+    return current.uid;
+  }
 
-      // Caso c: user presente pero NO anónimo (sesión admin/colab)
-      // Necesitamos desautenticarlo antes de crear la sesión anónima, porque
-      // Firebase no permite dos sesiones simultáneas en la misma app.
-      if (user && !user.isAnonymous) {
-        resolved = true;
-        unsub();
-        try {
-          await signOut(auth);
-        } catch {}
-        try {
-          const cred = await signInAnonymously(auth);
-          anonUid = cred.user.uid;
-          resolve(cred.user.uid);
-        } catch (err) {
-          reject(err);
-        }
-        return;
-      }
+  // Caso b: hay user NO anónimo (alguien logueado con email)
+  if (current && !current.isAnonymous) {
+    try {
+      await signOut(auth);
+    } catch {}
+  }
 
-      // Caso d: no hay user → crear anónimo
-      resolved = true;
-      unsub();
-      try {
-        const cred = await signInAnonymously(auth);
-        anonUid = cred.user.uid;
-        resolve(cred.user.uid);
-      } catch (err) {
-        reject(err);
-      }
-    });
-
-    // Safety timeout: si Firebase no dispara onAuthStateChanged en 10s
-    // (raro pero puede pasar sin red), rechazar para no dejar el spinner colgado.
-    setTimeout(() => {
-      if (!resolved) {
-        resolved = true;
-        unsub();
-        reject(new Error("Timeout esperando auth. Revisá tu conexión."));
-      }
-    }, 10000);
-  });
+  // Caso c (y b continuado): crear sesión anónima
+  const cred = await signInAnonymously(auth);
+  anonUid = cred.user.uid;
+  return cred.user.uid;
 }
 
 export function getAnonUid() { return anonUid; }

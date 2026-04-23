@@ -350,28 +350,20 @@ export function startRouter() {
   window.addEventListener("hashchange", render);
 
   onAuthStateChanged(auth, async user => {
-    // Si estamos en una ruta del portal cliente, SALTAMOS el flujo admin/colab
-    // completamente. El portal se auto-autentica como anónimo y maneja todo
-    // internamente.
-    //
-    // Importante: si ya hay un render del portal en curso (sessionReady true)
-    // y lo único que cambió es que el uid anónimo se renovó, NO re-renderizamos.
-    // Eso evita el parpadeo "conectando → pedí PIN → conectando" que ocurre
-    // cuando Firebase refresca el token anónimo a mitad de sesión.
+    // Si estamos en una ruta del portal cliente, el router NO interviene.
+    // El portal tiene su propio ciclo de auth (anónimo) y cualquier render
+    // adicional del router causaría bucles. Solo hacemos el primer render
+    // para que el handler arranque; de ahí en adelante, si el portal necesita
+    // actualizar UI, lo hace por su cuenta.
     if (isClientPortalRoute()) {
-      const wasAnonymousBefore = currentUser?.isAnonymous;
+      const isFirstRender = !sessionReady;
       currentUser = user;
       currentRole = user?.isAnonymous ? "client-anon" : null;
       currentUserDoc = null;
       currentProfile = null;
       currentPermissions = null;
-
-      const isFirstRender = !sessionReady;
       sessionReady = true;
-
-      // Solo render en el primer caso (carga inicial) o si hubo un cambio real
-      // de tipo de auth (de no-anónimo a anónimo o viceversa)
-      if (isFirstRender || wasAnonymousBefore !== user?.isAnonymous) {
+      if (isFirstRender) {
         render();
       }
       return;
