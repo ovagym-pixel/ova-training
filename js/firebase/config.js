@@ -1,7 +1,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
-  getFirestore,
-  enableIndexedDbPersistence
+  initializeFirestore,
+  persistentLocalCache,
+  persistentSingleTabManager
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getAuth } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
@@ -15,16 +16,14 @@ const firebaseConfig = {
 };
 
 export const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
-export const auth = getAuth(app);
 
-enableIndexedDbPersistence(db).catch(err => {
-  if (err.code === "failed-precondition") {
-    console.warn("Persistencia offline: múltiples pestañas abiertas");
-  } else if (err.code === "unimplemented") {
-    console.warn("Persistencia offline no soportada en este navegador");
-  }
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({
+    tabManager: persistentSingleTabManager({})
+  })
 });
+
+export const auth = getAuth(app);
 
 export const groqConfig = {
   apiKey: "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",
