@@ -1,0 +1,79 @@
+:root {
+  --bg: #0a0a0a;
+  --bg-2: #141414;
+  --bg-3: #1c1c1c;
+  --bg-nav: #000000;
+
+  --ink: #f2f0e8;
+  --ink-2: rgba(242, 240, 232, 0.75);
+  --ink-3: rgba(242, 240, 232, 0.45);
+
+  --line: rgba(242, 240, 232, 0.12);
+  --line-2: rgba(242, 240, 232, 0.22);
+
+  --accent: #ffd900;
+  --accent-ink: #0a0a0a;
+  --accent-hover: #ffe640;
+
+  --ok: #7dd3a4;
+  --warn: #ffa64d;
+  --danger: #ff6a3d;
+  --gray: #6b6b6b;
+  --info: #6bb8ff;
+
+  --font-sans: "Space Grotesk", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  --fs-base: 14px;
+  --fs-tiny: 10px;
+  --fs-small: 12px;
+  --fs-medium: 14px;
+  --fs-large: 16px;
+  --fs-h3: 16px;
+  --fs-h2: 24px;
+  --fs-h1: 40px;
+
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 14px;
+  --space-lg: 20px;
+  --space-xl: 32px;
+  --space-xxl: 50px;
+
+  --radius-sm: 2px;
+  --radius-md: 3px;
+  --radius-lg: 4px;
+
+  --sidebar-w: 240px;
+  --topbar-h: 52px;
+  --max-content-w: 1200px;
+
+  --transition-fast: 0.12s ease;
+  --transition-mid: 0.2s ease;
+}
+
+.light {
+  --bg: #faf9f5;
+  --bg-2: #ffffff;
+  --bg-3: #f1efe8;
+  --bg-nav: #0a0a0a;
+
+  --ink: #0a0a0a;
+  --ink-2: rgba(10, 10, 10, 0.75);
+  --ink-3: rgba(10, 10, 10, 0.5);
+
+  --line: rgba(10, 10, 10, 0.12);
+  --line-2: rgba(10, 10, 10, 0.22);
+}
+
+.fs-sm {
+  --fs-base: 12px;
+  --fs-h1: 32px;
+  --fs-h2: 20px;
+}
+
+.fs-lg {
+  --fs-base: 16px;
+  --fs-h1: 48px;
+  --fs-h2: 28px;
+}
