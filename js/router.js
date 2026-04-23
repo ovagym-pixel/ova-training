@@ -45,7 +45,7 @@ import {
 // desde Firebase Console. Esto previene quedar trancado sin acceso si
 // accidentalmente se borra el doc del admin principal.
 // Si querés cambiarlo, editá esta constante.
-const RECOVERY_ADMIN_EMAIL = "simon.fattobene.w@gmail.com";
+const RECOVERY_ADMIN_EMAIL = "simon@ovagym.com";
 // ----------------------------------------------------------------------------
 
 const routes = {};
