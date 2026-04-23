@@ -11,10 +11,9 @@
 // se construyen en B.5+.
 // ============================================================================
 
-import { db } from "../../firebase/config.js";
 import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { auth } from "../../firebase/config.js";
+import { clientAuth, db } from "../../firebase/client-config.js";
 import { clearLastToken } from "../../shared/client-session.js";
 
 export async function renderPortalHome({ root, access, uid }) {
@@ -76,7 +75,7 @@ export async function renderPortalHome({ root, access, uid }) {
     if (!confirm("¿Cerrar sesión en este dispositivo? La próxima vez que entres al link vas a tener que ingresar tu PIN.")) return;
 
     try {
-      await signOut(auth);
+      await signOut(clientAuth);
     } catch {}
     clearLastToken();
 

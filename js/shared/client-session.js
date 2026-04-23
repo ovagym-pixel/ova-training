@@ -17,10 +17,9 @@
 // Todo asume que Firebase Anonymous Auth está habilitado en el proyecto.
 // ============================================================================
 
-import { auth, db } from "../firebase/config.js";
+import { clientAuth as auth, db } from "../firebase/client-config.js";
 import {
-  signInAnonymously,
-  signOut
+  signInAnonymously
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   doc,
@@ -47,16 +46,19 @@ let loadedAccess = null;  // doc /clientAccess/{token}
 // ----------------------------------------------------------------------------
 
 /**
- * Garantiza que hay un usuario anónimo autenticado para el portal cliente.
+ * Garantiza que hay un usuario anónimo en la instancia de auth del cliente.
  *
- * Implementación sin listeners: usamos auth.authStateReady() (Firebase SDK
- * 10+) que resuelve una sola vez cuando el estado persistido está hidratado.
- * Así evitamos conflictos con el onAuthStateChanged del router global.
+ * Gracias a que `clientAuth` es una instancia de Firebase App independiente
+ * (nombre "client-portal"), no compite con la sesión admin de la app principal.
+ * El usuario puede estar logueado como admin en otra pestaña y acá ser anónimo
+ * simultáneamente — no se pisan.
  *
- * Casos que maneja:
- *   a) Ya hay user anónimo → usarlo
- *   b) Hay user NO anónimo → signOut, después signInAnonymously
- *   c) No hay user → signInAnonymously
+ * Casos:
+ *   a) Ya hay user anónimo en clientAuth → usarlo
+ *   b) No hay user → signInAnonymously
+ *
+ * Nota: NO existe el caso "user no anónimo en clientAuth", porque esa
+ * instancia solo la usa el portal cliente.
  */
 export async function ensureAnonAuth() {
   // Fast path dentro de la misma sesión de pestaña
@@ -64,8 +66,7 @@ export async function ensureAnonAuth() {
     return anonUid;
   }
 
-  // Esperar a que Firebase termine de hidratar el estado persistido.
-  // authStateReady() está disponible en Firebase JS SDK 10.x+
+  // Esperar a que la instancia cliente termine de hidratar su estado
   try {
     await auth.authStateReady();
   } catch (err) {
@@ -80,14 +81,7 @@ export async function ensureAnonAuth() {
     return current.uid;
   }
 
-  // Caso b: hay user NO anónimo (alguien logueado con email)
-  if (current && !current.isAnonymous) {
-    try {
-      await signOut(auth);
-    } catch {}
-  }
-
-  // Caso c (y b continuado): crear sesión anónima
+  // Caso b: crear sesión anónima
   const cred = await signInAnonymously(auth);
   anonUid = cred.user.uid;
   return cred.user.uid;

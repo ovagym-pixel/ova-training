@@ -349,26 +349,25 @@ const BLOCK_MESSAGES = {
 export function startRouter() {
   window.addEventListener("hashchange", render);
 
-  onAuthStateChanged(auth, async user => {
-    // Si estamos en una ruta del portal cliente, el router NO interviene.
-    // El portal tiene su propio ciclo de auth (anónimo) y cualquier render
-    // adicional del router causaría bucles. Solo hacemos el primer render
-    // para que el handler arranque; de ahí en adelante, si el portal necesita
-    // actualizar UI, lo hace por su cuenta.
-    if (isClientPortalRoute()) {
-      const isFirstRender = !sessionReady;
-      currentUser = user;
-      currentRole = user?.isAnonymous ? "client-anon" : null;
-      currentUserDoc = null;
-      currentProfile = null;
-      currentPermissions = null;
-      sessionReady = true;
-      if (isFirstRender) {
-        render();
-      }
-      return;
-    }
+  // Si arrancamos directamente en una ruta del portal cliente, el router NO
+  // necesita esperar al flujo de auth admin (la sesión cliente vive en otra
+  // instancia de Firebase). Renderizamos de inmediato y el portal se auto-
+  // gestiona internamente.
+  if (isClientPortalRoute()) {
+    sessionReady = true;
+    currentUser = null;
+    currentRole = "client-anon";
+    currentUserDoc = null;
+    currentProfile = null;
+    currentPermissions = null;
+    render();
+    // No suscribimos al onAuthStateChanged de la app principal porque no
+    // nos interesa: estamos en el portal cliente. Si el usuario navega
+    // fuera del portal (cambia el hash), el evento hashchange hará render().
+    return;
+  }
 
+  onAuthStateChanged(auth, async user => {
     const result = await loadUserSession(user);
     sessionReady = true;
 
@@ -383,9 +382,9 @@ export function startRouter() {
     }
 
     // Caso especial: usuario anónimo pero NO estamos en ruta del portal cliente.
-    // Esto pasa si alguien cerró el portal y volvió a la raíz. Como no tiene
-    // doc en /users, el flujo normal lo desautenticaría. En su lugar, lo
-    // mandamos a /login silenciosamente sin mostrar mensaje de error.
+    // En la NUEVA arquitectura esto NO debería ocurrir (los anónimos viven en
+    // la instancia clientAuth, no en ésta). Si ocurre, es residual de una
+    // sesión vieja — hacemos signOut silencioso.
     if (user.isAnonymous) {
       await signOut(auth);
       window.location.hash = "/login";
