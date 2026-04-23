@@ -20,6 +20,7 @@
 import { auth, db } from "../firebase/config.js";
 import {
   signInAnonymously,
+  signOut,
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
@@ -47,29 +48,65 @@ let loadedAccess = null;  // doc /clientAccess/{token}
 // ----------------------------------------------------------------------------
 
 /**
- * Garantiza que hay un usuario anónimo autenticado. Si ya estaba, devuelve
- * el uid existente. Si no, hace signInAnonymously().
+ * Garantiza que hay un usuario anónimo autenticado para el portal cliente.
  *
- * Resuelve un problema tricky: onAuthStateChanged es async y la primera
- * ejecución puede no tener user todavía, aunque técnicamente ya haya credencial
- * guardada. Entonces esperamos una notificación antes de intentar sign in.
+ * Casos que maneja:
+ *   a) Ya tenemos un uid anónimo cacheado en memoria y sigue válido → usarlo
+ *   b) auth.currentUser existe y es anónimo → usarlo
+ *   c) auth.currentUser existe pero NO es anónimo (se loguea alguien con email
+ *      y entra al link de cliente por error) → NO queremos pisar su sesión,
+ *      hacemos sign-out y después signInAnonymously
+ *   d) No hay user → signInAnonymously
+ *
+ * La clave: esperar que Firebase termine de hidratar el estado persistido
+ * antes de decidir. Por eso usamos onAuthStateChanged y NO miramos
+ * auth.currentUser directamente al principio (puede ser null antes de hidratar
+ * y luego cambiar).
  */
 export function ensureAnonAuth() {
   return new Promise((resolve, reject) => {
-    // Caso 1: ya lo tenemos cacheado en memoria
-    if (anonUid && auth.currentUser?.uid === anonUid) {
+    // Fast path: ya resolvimos en esta misma sesión de pestaña
+    if (anonUid && auth.currentUser?.uid === anonUid && auth.currentUser?.isAnonymous) {
       resolve(anonUid);
       return;
     }
 
-    // Caso 2: Firebase ya resolvió el auth state
+    let resolved = false;
+
     const unsub = onAuthStateChanged(auth, async user => {
-      unsub();
-      if (user) {
+      if (resolved) return;
+
+      // Caso a+b: user presente y anónimo → reutilizar
+      if (user && user.isAnonymous) {
+        resolved = true;
+        unsub();
         anonUid = user.uid;
         resolve(user.uid);
         return;
       }
+
+      // Caso c: user presente pero NO anónimo (sesión admin/colab)
+      // Necesitamos desautenticarlo antes de crear la sesión anónima, porque
+      // Firebase no permite dos sesiones simultáneas en la misma app.
+      if (user && !user.isAnonymous) {
+        resolved = true;
+        unsub();
+        try {
+          await signOut(auth);
+        } catch {}
+        try {
+          const cred = await signInAnonymously(auth);
+          anonUid = cred.user.uid;
+          resolve(cred.user.uid);
+        } catch (err) {
+          reject(err);
+        }
+        return;
+      }
+
+      // Caso d: no hay user → crear anónimo
+      resolved = true;
+      unsub();
       try {
         const cred = await signInAnonymously(auth);
         anonUid = cred.user.uid;
@@ -78,6 +115,16 @@ export function ensureAnonAuth() {
         reject(err);
       }
     });
+
+    // Safety timeout: si Firebase no dispara onAuthStateChanged en 10s
+    // (raro pero puede pasar sin red), rechazar para no dejar el spinner colgado.
+    setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        unsub();
+        reject(new Error("Timeout esperando auth. Revisá tu conexión."));
+      }
+    }, 10000);
   });
 }
 

@@ -284,47 +284,60 @@ async function loadClient(clientId) {
 }
 
 async function regenerateToken(clientId) {
-  if (!confirm("¿Regenerar link? El link viejo va a dejar de funcionar.")) return;
+  if (!confirm(
+    "¿Regenerar link?\n\n" +
+    "Esto va a:\n" +
+    "  • Invalidar el link viejo\n" +
+    "  • Revocar TODOS los dispositivos confiables\n" +
+    "\nEl cliente va a tener que ingresar su PIN desde todos sus dispositivos."
+  )) return;
 
   const oldClient = await loadClient(clientId);
   const oldToken = oldClient.accessToken;
   const newToken = generateAccessToken(40);
-  const trustedUids = oldClient.trustedUids
-    || (oldClient.trustedDevices || []).map(d => d.uid);
 
-  // 1) Crear nuevo clientAccess
+  // 1) Crear nuevo clientAccess (SIN trustedUids — todos los devices quedan
+  //    revocados al regenerar)
   await setDoc(doc(db, "clientAccess", newToken), {
     clientId: clientId,
     displayName: oldClient.displayName || "",
     pinHash: oldClient.pinHash || null,
     salt: oldClient.salt || null,
     pinSetAt: oldClient.pinSetAt || null,
-    pinFailedAttempts: oldClient.pinFailedAttempts || 0,
-    pinLockedUntil: oldClient.pinLockedUntil || null,
-    trustedUids,
+    pinFailedAttempts: 0,
+    pinLockedUntil: null,
+    trustedUids: [],
     clientPortalActive: oldClient.clientPortalActive !== false,
     createdAt: serverTimestamp()
   });
 
-  // 2) Actualizar /clients
+  // 2) Actualizar /clients — nuevo token, wipe trustedDevices y trustedUids
   await updateDoc(doc(db, "clients", clientId), {
     accessToken: newToken,
     accessTokenGeneratedAt: serverTimestamp(),
-    trustedUids
+    trustedDevices: [],
+    trustedUids: [],
+    pinFailedAttempts: 0,
+    pinLockedUntil: null
   });
 
-  // 3) Invalidar el clientAccess viejo (si había)
+  // 3) Invalidar el clientAccess viejo
   if (oldToken && oldToken !== newToken) {
     try {
       await setDoc(
         doc(db, "clientAccess", oldToken),
-        { invalidated: true, invalidatedAt: serverTimestamp(), clientPortalActive: false },
+        {
+          invalidated: true,
+          invalidatedAt: serverTimestamp(),
+          clientPortalActive: false,
+          trustedUids: []
+        },
         { merge: true }
       );
     } catch {}
   }
 
-  toast("Link regenerado");
+  toast("Link regenerado y dispositivos revocados");
   await refreshList();
 }
 

@@ -353,14 +353,27 @@ export function startRouter() {
     // Si estamos en una ruta del portal cliente, SALTAMOS el flujo admin/colab
     // completamente. El portal se auto-autentica como anónimo y maneja todo
     // internamente.
+    //
+    // Importante: si ya hay un render del portal en curso (sessionReady true)
+    // y lo único que cambió es que el uid anónimo se renovó, NO re-renderizamos.
+    // Eso evita el parpadeo "conectando → pedí PIN → conectando" que ocurre
+    // cuando Firebase refresca el token anónimo a mitad de sesión.
     if (isClientPortalRoute()) {
+      const wasAnonymousBefore = currentUser?.isAnonymous;
       currentUser = user;
       currentRole = user?.isAnonymous ? "client-anon" : null;
       currentUserDoc = null;
       currentProfile = null;
       currentPermissions = null;
+
+      const isFirstRender = !sessionReady;
       sessionReady = true;
-      render();
+
+      // Solo render en el primer caso (carga inicial) o si hubo un cambio real
+      // de tipo de auth (de no-anónimo a anónimo o viceversa)
+      if (isFirstRender || wasAnonymousBefore !== user?.isAnonymous) {
+        render();
+      }
       return;
     }
 
