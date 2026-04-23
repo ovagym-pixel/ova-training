@@ -17,7 +17,9 @@ export function attachTopbarBehavior() {
   const theme = document.getElementById("theme-toggle");
   const fs = document.getElementById("fs-toggle");
 
-  if (theme) {
+  if (theme && !theme.dataset.attached) {
+    theme.dataset.attached = "1";
+
     const stored = localStorage.getItem("ova-theme");
     if (stored === "light") {
       document.body.classList.add("light");
@@ -31,10 +33,13 @@ export function attachTopbarBehavior() {
     });
   }
 
-  if (fs) {
+  if (fs && !fs.dataset.attached) {
+    fs.dataset.attached = "1";
+
     const modes = ["fs-sm", "", "fs-lg"];
     const labels = ["A-", "Aa", "A+"];
     let idx = parseInt(localStorage.getItem("ova-fs-idx") || "1", 10);
+    if (isNaN(idx) || idx < 0 || idx > 2) idx = 1;
 
     applyFs();
 
@@ -51,11 +56,3 @@ export function attachTopbarBehavior() {
     });
   }
 }
-
-document.addEventListener("click", e => {
-  if (e.target && (e.target.id === "theme-toggle" || e.target.id === "fs-toggle")) {
-    setTimeout(attachTopbarBehavior, 0);
-  }
-}, true);
-
-window.attachTopbarBehavior = attachTopbarBehavior;
